@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D Wedding Ring GLB Loader</title>
+    <style>
+      body { margin: 0; overflow: hidden; background-color: #101010; }
+      canvas { display: block; }
+    </style>
+  </head>
+  <body>
+    <script src="https://cdn.jsdelivr.net/npm/three/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/loaders/RGBELoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/libs/draco/draco_decoder.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three/examples/js/loaders/DRACOLoader.js"></script>
+    <script>
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x101010);
+
+      const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+      camera.position.set(0, 1, 3);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+      document.body.appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+
+      // Create a gradient canvas texture for the background
+      function createGradientTexture(colorTop, colorBottom) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 4096;
+        canvas.height = 4096;
+        const ctx = canvas.getContext('2d');
+        // Create vertical gradient
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        gradient.addColorStop(0, colorTop);
+        gradient.addColorStop(1, colorBottom);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Make a texture
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        return texture;
+      }
+
+      // Load environment map
+      const rgbeLoader = new THREE.RGBELoader();
+      rgbeLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/textures/equirectangular/royal_esplanade_1k.hdr', function (texture) {
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        scene.environment = texture;
+        //scene.background = createGradientTexture('#283e66', '#f1eae1');
+        scene.background = createGradientTexture('#333333', '#000000');
+
+        // Create Draco loader
+        const dracoLoader = new THREE.DRACOLoader();
+        dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three/examples/js/libs/draco/'); // Path to Draco decoder
+        
+        // Load GLB (ring) model
+        const loader = new THREE.GLTFLoader();
+        loader.setDRACOLoader(dracoLoader);
+        loader.load('ring.glb', function (gltf) {
+          // You may need to scale, rotate, or position your model for best placement!
+          const ring = gltf.scene;
+          const goldMaterial = new THREE.MeshPhysicalMaterial({
+            //color: 0xffd700,
+            //color: 0xffe77a,
+            color: 0xe8de95,
+            metalness: 1.0,
+            roughness: 0.15,
+            reflectivity: 1.0,
+            envMapIntensity: 1.2,
+            clearcoat: 1.0,
+          });
+          ring.traverse(child => {
+            // Smooth geometry normals for better shading
+            if (child.geometry && child.geometry.isBufferGeometry) {
+              child.geometry.computeVertexNormals();
+            }
+            if (child.isMesh) {
+              child.material = goldMaterial;
+              child.material.needsUpdate = true;
+            }
+          });
+          // Optionally adjust scale/position if needed for your model
+          ring.scale.set(0.1, 0.1, 0.1);
+          ring.position.set(0, 0, 0);
+          scene.add(ring);
+        });
+
+        // Load GLB diamond
+        const diamondLoader = new THREE.GLTFLoader();
+        diamondLoader.setDRACOLoader(dracoLoader);
+        diamondLoader.load('diamond.glb', function (gltf) {
+          const diamond = gltf.scene;
+          const diamondMaterial = new THREE.MeshPhysicalMaterial({
+            color: 0x99ccff,
+            metalness: 0,
+            roughness: 0,
+            transmission: 1,
+            thickness: 2,
+            transparent: true,
+            ior: 2.4,
+            depthWrite: false,
+            envMapIntensity: 2.0,
+          });
+          diamond.traverse(child => {
+            if (child.isMesh) {
+              if (child.geometry && child.geometry.isBufferGeometry) {
+                child.geometry.computeVertexNormals();
+              }
+              child.material = diamondMaterial;
+              child.material.needsUpdate = true;
+            }
+          });
+          diamond.scale.set(0.1,0.1,0.1); // Adjust scale as needed for your model!
+          diamond.position.set(0, 0, 0);     // Position relative to ring
+          scene.add(diamond);
+        });
+
+        function animate() {
+          requestAnimationFrame(animate);
+          controls.update();
+          renderer.render(scene, camera);
+        }
+        animate();
+      });
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    </script>
+  </body>
+</html>
